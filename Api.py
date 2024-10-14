@@ -1,5 +1,5 @@
 # import the dependencies
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, status,HTTPException
 from fastapi.params import Body #  To get data into Body of App.
 from pydantic import BaseModel #  To validate data
 from typing import Optional
@@ -54,18 +54,41 @@ my_posts = [
 async def get_posts():
     return {"data": my_posts}
 
-@app.post("/posts")
-async def create_post(post:dict = Post):
-    my_posts.append(post)
-    print(my_posts)
-    return {"data":my_posts}
+def dup_post(id) -> bool:
+    return any(post["id"] == id for post in my_posts)
 
-def find_post(id):
-    for i in my_posts:
-        if i["id"]==id:
-            return i
+@app.post("/posts", status_code=status.HTTP_201_CREATED)
+async def create_post(post: dict):
+    if dup_post(post["id"]):
+        raise HTTPException(status_code=400, detail=f"Post with id {post['id']} already exists.")
+    else:
+        my_posts.append(post)
+        print(my_posts)
+    return {"data":  {"data":my_posts}}
+
         
 @app.get("/posts/{id}")
-def get_post(id: int):
+def get_post(id: int, response:Response):
     posts = find_post(id)
+    if not posts:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail=f"post with {id} Not_Found")
+        # response.status_code=status.HTTP_404_NOT_FOUND
+    # return {'message':f"post with {id} Not_Found"}
+    
     return posts
+
+def find_post(id):
+    for p,i in enumerate(my_posts):
+        if i["id"]==id:
+            return p
+
+@app.delete("/posts/{id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_post(id: int):
+    post = find_post(id)
+    if id>len(my_posts):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail=f"Id {id} doesn't exist.")
+    my_posts.pop(post)
+
+    return {'message':'Post deleted'}
+    
+
